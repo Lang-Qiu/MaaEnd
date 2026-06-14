@@ -74,7 +74,7 @@ const RESTORE_OPERATOR_BONUS_TYPES = new Set([
     "moneyProduceSpeed",
 ]);
 
-// 从 settlement_trade.operators 生成全局干员 case 基表，并保持现有 i18n 顺序。
+// 从 settlement_trade.operators 生成全局干员基表，并保持现有 i18n 顺序。
 function buildOperatorCaseEntries() {
     return Object.values(settlementData.operators || {})
         .filter((operator) => operator.name?.EN !== "Endministrator" && operator.name?.CN !== "管理员")
@@ -123,6 +123,22 @@ function buildOperatorNameSetByBonusTypes(settlement, bonusTypes) {
 // 用据点级干员名集合筛选全局干员 case，同时保留全局排序。
 function filterOperatorCaseEntries(operatorNames) {
     return OPERATOR_CASE_ENTRIES.filter((entry) => operatorNames.has(entry.name));
+}
+
+// 构造 SellProductSelectBestOperator 的完整参数，供默认节点和强制刷新覆盖复用。
+function buildOperatorSelectActionParam(usage, location, mode = "cache") {
+    return {
+        mode,
+        usage,
+        location,
+        roi: [
+            164,
+            121,
+            700,
+            430,
+        ],
+        max_swipes: 8,
+    };
 }
 
 // TODO(SellProduct): 活动结束后，临时排除以下活动物品，避免继续生成到可售卖列表。
@@ -432,6 +448,30 @@ function buildRestoreOperatorCases(nodePrefix, operatorNames) {
     ];
 }
 
+// 生成全局「拥有干员刷新方式」选项；强制刷新 case 覆盖完整参数，避免浅合并丢失候选列表。
+function buildOperatorRefreshModeCases(locations) {
+    const refreshOverride = {};
+    for (const loc of locations) {
+        refreshOverride[`SellProduct${loc.LocationId}AutoSelectTargetOperator`] = {
+            custom_action_param: buildOperatorSelectActionParam("target", loc.LocationId, "refresh"),
+        };
+        refreshOverride[`SellProduct${loc.LocationId}AutoSelectRestoreOperator`] = {
+            custom_action_param: buildOperatorSelectActionParam("restore", loc.LocationId, "refresh"),
+        };
+    }
+    return [
+        {
+            name: "Cache",
+            label: "$task.SellProduct.OperatorDataSourceCache",
+        },
+        {
+            name: "Refresh",
+            label: "$task.SellProduct.OperatorDataSourceRefresh",
+            pipeline_override: refreshOverride,
+        },
+    ];
+}
+
 // ===== BetterSliding Quantity.Box（Win 端 / ADB 端） =====
 // 改这里就够了，模板里 4 个 BetterSliding 节点会自动同步
 const QUANTITY_BOX = [
@@ -469,6 +509,7 @@ export const settlementFlatRows = LOCATIONS.map((loc) => {
         LocationId: loc.LocationId,
         LocationDesc: loc.LocationDesc,
         TextExpected: loc.TextExpected,
+        OperatorRefreshModeCases: buildOperatorRefreshModeCases(LOCATIONS),
         QuantityBox: QUANTITY_BOX,
         QuantityBoxAdb: QUANTITY_BOX_ADB,
         MaxTargetBox: MAX_QUANTITY_BOX,
@@ -479,7 +520,9 @@ export const settlementFlatRows = LOCATIONS.map((loc) => {
         ItemCases4: buildItemCases(loc.LocationId, 4, entries),
         TargetOperatorDefaultCase: targetOperatorCases[0]?.name,
         TargetOperatorCases: targetOperatorCases,
+        TargetOperatorSelectBestParam: buildOperatorSelectActionParam("target", loc.LocationId),
         RestoreOperatorCases: restoreOperatorCases,
+        RestoreOperatorSelectBestParam: buildOperatorSelectActionParam("restore", loc.LocationId),
     };
 });
 
